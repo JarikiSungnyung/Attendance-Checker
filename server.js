@@ -10,9 +10,8 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-const PORT = process.env.PORT || 3000;
-
 dotenv.config();
+const PORT = process.env.PORT || 3000;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 
 // 멤버별 금주 고유 출석일 수 집계
@@ -58,25 +57,38 @@ app.post('/api/finalize', authAdmin, async (req, res) => {
     const { weekId, start, end } = getCurrentWeek();
     const weekPath = getWeekFilePath(weekId);
 
-    const week = await readJson(weekPath, { weekId, start, end, checkins: [], finalized: false });
-    if (week.finalized) return res.json({ ok: true, message: 'already finalized' });
+    const week = await readJson(weekPath, {
+      weekId,
+      start,
+      end,
+      checkins: [],
+      finalized: false
+    });
+    if (week.finalized)
+      return res.json({ ok: true, message: 'already finalized' });
 
-    // 멤버 목록
-    const members = (await readJson('data/members.json', { members: [] })).members
-      .filter(m => m.active !== false);
+    // ===== 멤버 목록 =====
+    let membersData = await readJson('data/members.json', { members: [] });
+    // ✅ members.json 구조가 { members: [...] } 이든 그냥 배열이든 둘 다 처리
+    let members = Array.isArray(membersData)
+      ? membersData
+      : (membersData.members || []);
+    members = members.filter(m => m.active !== false);
 
-    // 멤버별 출석일 집계
-    const unique = new Set(week.checkins.map(c => `${c.memberId}|${c.date.slice(0, 10)}`));
+    // ===== 멤버별 출석일 집계 =====
+    const unique = new Set(
+      week.checkins.map(c => `${c.memberId}|${c.date.slice(0, 10)}`)
+    );
     const counts = {};
     unique.forEach(k => {
       const [mid] = k.split('|');
       counts[mid] = (counts[mid] || 0) + 1;
     });
 
-    // ledger 읽기
+    // ===== ledger 읽기 =====
     const ledger = await readJson('data/ledger.json', { entries: [] });
 
-    // 각 멤버 벌금 계산
+    // ===== 각 멤버 벌금 계산 =====
     members.forEach(m => {
       const count = counts[m.id] || 0;
       const deficit = Math.max(0, 4 - count);
@@ -91,6 +103,7 @@ app.post('/api/finalize', authAdmin, async (req, res) => {
       }
     });
 
+    // ===== 파일 저장 =====
     week.finalized = true;
     await writeJson(weekPath, week);
     await writeJson('data/ledger.json', ledger);
