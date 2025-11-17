@@ -41,7 +41,7 @@ async function ensureMemberMap() {
   try {
     const list = await fetchJSON('/api/members');
     memberMap = {};
-    list.forEach(m => memberMap[m.id] = m.name || m.id);
+    list.forEach(m => (memberMap[m.id] = m.name || m.id));
   } catch {
     memberMap = {};
   }
@@ -93,7 +93,9 @@ async function finalizeWeek() {
 // ===== 멤버별 합계 표 =====
 async function loadMemberSummary() {
   const tbody = $('#memberSummaryBody');
-  tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">로딩 중…</td></tr>`;
+  // 🔹 열 6개(멤버, 결손, 벌금, 납부액, 미납액, 상태)
+  tbody.innerHTML =
+    `<tr><td colspan="6" class="text-center text-muted">로딩 중…</td></tr>`;
 
   try {
     await ensureMemberMap();
@@ -106,7 +108,8 @@ async function loadMemberSummary() {
     const rows = data?.rows || [];
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">데이터가 없습니다.</td></tr>`;
+      tbody.innerHTML =
+        `<tr><td colspan="6" class="text-center text-muted">데이터가 없습니다.</td></tr>`;
       $('#sumDeficit').textContent = '-';
       $('#sumFine').textContent = '-';
       $('#sumPaid').textContent = '-';
@@ -117,40 +120,39 @@ async function loadMemberSummary() {
     // 합계
     let sDef = 0, sFine = 0, sPaid = 0, sOut = 0;
 
-    const trs = rows.map(r => {
-      const name = memberMap[r.memberId] || r.memberId;
+    const trs = rows
+      .map(r => {
+        const name = memberMap[r.memberId] || r.memberId;
 
-      sDef += r.totalDeficit || 0;
-      sFine += r.totalFine || 0;
-      sPaid += r.totalPaid || 0;
-      sOut += r.outstanding || 0;
+        sDef += r.totalDeficit || 0;
+        sFine += r.totalFine || 0;
+        sPaid += r.totalPaid || 0;
+        sOut += r.outstanding || 0;
 
-      const weeks = (r.weeks || []).map(fmtWeekId).join(', ');
+        // 미납이면: [납부] + [내역], 완납이면: 뱃지
+        const statusCell = r.fullyPaid
+          ? `<span class="badge text-bg-success">완납</span>`
+          : `<div class="d-flex gap-1">
+               <button class="btn btn-warning btn-sm pay-btn"
+                       title="납부 입력"
+                       data-member="${r.memberId}"
+                       data-weeks="${(r.weeks || []).join(',')}">납부</button>
+               <button class="btn btn-outline-secondary btn-sm log-btn"
+                       data-member="${r.memberId}">내역</button>
+             </div>`;
 
-      // 미납이면: [납부] + [내역], 완납이면: 뱃지
-      const statusCell = r.fullyPaid
-        ? `<span class="badge text-bg-success">완납</span>`
-        : `<div class="d-flex gap-1">
-             <button class="btn btn-warning btn-sm pay-btn"
-                     title="납부 입력"
-                     data-member="${r.memberId}"
-                     data-weeks="${(r.weeks || []).join(',')}">납부</button>
-             <button class="btn btn-outline-secondary btn-sm log-btn"
-                     data-member="${r.memberId}">내역</button>
-           </div>`;
-
-      return `
-        <tr>
-          <td>${name} <span class="text-muted small">(${r.memberId})</span></td>
-          <td>${r.totalDeficit ?? 0}</td>
-          <td>${fmtWon(r.totalFine ?? 0)}</td>
-          <td>${fmtWon(r.totalPaid ?? 0)}</td>
-          <td>${fmtWon(r.outstanding ?? 0)}</td>
-          <td>${statusCell}</td>
-          <td class="small text-muted">${weeks}</td>
-        </tr>
-      `;
-    }).join('');
+        return `
+          <tr>
+            <td>${name} <span class="text-muted small">(${r.memberId})</span></td>
+            <td>${r.totalDeficit ?? 0}</td>
+            <td>${fmtWon(r.totalFine ?? 0)}</td>
+            <td>${fmtWon(r.totalPaid ?? 0)}</td>
+            <td>${fmtWon(r.outstanding ?? 0)}</td>
+            <td>${statusCell}</td>
+          </tr>
+        `;
+      })
+      .join('');
 
     tbody.innerHTML = trs;
 
@@ -160,7 +162,8 @@ async function loadMemberSummary() {
     $('#sumPaid').textContent = fmtWon(sPaid);
     $('#sumOutstanding').textContent = fmtWon(sOut);
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">로드 실패: ${e.message || '에러'}</td></tr>`;
+    tbody.innerHTML =
+      `<tr><td colspan="6" class="text-danger text-center">로드 실패: ${e.message || '에러'}</td></tr>`;
   }
 }
 
@@ -208,7 +211,9 @@ async function submitPayment() {
       body: JSON.stringify({ weekId, memberId, paidAmount, method, note })
     });
 
-    alert(`납부 완료!\n총 납부액: ${res.totalPaid.toLocaleString()}원\n미납액: ${res.outstanding.toLocaleString()}원`);
+    alert(
+      `납부 완료!\n총 납부액: ${res.totalPaid.toLocaleString()}원\n미납액: ${res.outstanding.toLocaleString()}원`
+    );
     payModal.hide();
     loadMemberSummary();
     loadLedgerChart();
@@ -219,7 +224,8 @@ async function submitPayment() {
 
 async function openPaymentLog(memberId) {
   const memberName = memberMap?.[memberId] || memberId;
-  $('#paymentLogBody').innerHTML = `<div class="text-center text-muted">불러오는 중...</div>`;
+  $('#paymentLogBody').innerHTML =
+    `<div class="text-center text-muted">불러오는 중...</div>`;
   paymentLogModal.show();
 
   try {
@@ -237,13 +243,23 @@ async function openPaymentLog(memberId) {
 
     for (const e of entries) {
       const pays = Array.isArray(e.payments)
-        ? e.payments.map(p =>
-            `${fmtWon(p.amount)} (${p.method})<br><span class="text-muted small">${(p.paidAt || '').split('T')[0] || ''}</span>`
-          ).join('<hr class="my-1">')
+        ? e.payments
+            .map(
+              p =>
+                `${fmtWon(p.amount)} (${p.method})<br><span class="text-muted small">${(p.paidAt || '').split('T')[0] || ''}</span>`
+            )
+            .join('<hr class="my-1">')
         : '<span class="text-muted small">없음</span>';
 
-      const totalPaid = e.totalPaid ?? (e.payments?.reduce((s, p) => s + (Number(p.amount) || 0), 0) || 0);
-      const outstanding = e.outstanding ?? Math.max(0, (Number(e.fine) || 0) - totalPaid);
+      const totalPaid =
+        e.totalPaid ??
+        (e.payments?.reduce(
+          (s, p) => s + (Number(p.amount) || 0),
+          0
+        ) || 0);
+      const outstanding =
+        e.outstanding ??
+        Math.max(0, (Number(e.fine) || 0) - totalPaid);
 
       html += `<tr>
         <td>${fmtWeekId(e.weekId)}</td>
@@ -257,7 +273,8 @@ async function openPaymentLog(memberId) {
     html += '</tbody></table></div>';
     $('#paymentLogBody').innerHTML = html;
   } catch (err) {
-    $('#paymentLogBody').innerHTML = `<div class="text-danger text-center">${err.message || '불러오기 실패'}</div>`;
+    $('#paymentLogBody').innerHTML =
+      `<div class="text-danger text-center">${err.message || '불러오기 실패'}</div>`;
   }
 }
 
@@ -271,23 +288,25 @@ async function loadLedgerChart() {
   try {
     const data = await fetchJSON('/api/ledger?summary=week');
     // weekId 오름차순 정렬
-    const rows = (data.rows || []).sort((a, b) => a.weekId > b.weekId ? 1 : -1);
+    const rows = (data.rows || []).sort((a, b) =>
+      a.weekId > b.weekId ? 1 : -1
+    );
 
     const labels = rows.map(r => fmtWeekId(r.weekId));
 
     // 🔹 주차별 합계를 "누적"으로 변환
     const fines = [];
-    const outs  = [];
+    const outs = [];
     let cumFine = 0;
-    let cumOut  = 0;
+    let cumOut = 0;
 
     for (const r of rows) {
       const f = Number(r.totalFine || 0);
       const o = Number(r.outstanding || 0);
       cumFine += f;
-      cumOut  += o;
-      fines.push(cumFine);   // 누적 벌금
-      outs.push(cumOut);     // 누적 미납액
+      cumOut += o;
+      fines.push(cumFine); // 누적 벌금
+      outs.push(cumOut); // 누적 미납액
     }
 
     const chartData = {
@@ -328,14 +347,19 @@ async function loadLedgerChart() {
         legend: { position: 'bottom' },
         tooltip: {
           callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${ctx.formattedValue}원`
+            label: ctx =>
+              `${ctx.dataset.label}: ${ctx.formattedValue}원`
           }
         }
       }
     };
 
     if (ledgerChart) ledgerChart.destroy();
-    ledgerChart = new Chart(ctx, { type: 'line', data: chartData, options: chartOptions });
+    ledgerChart = new Chart(ctx, {
+      type: 'line',
+      data: chartData,
+      options: chartOptions
+    });
   } catch (err) {
     console.error('Chart load error:', err);
   }
@@ -356,25 +380,39 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // 마감 버튼
   $('#finalizeBtn').addEventListener('click', () => {
-    if (confirm('이번 주를 마감하시겠습니까? 마감 후에는 출석 수정이 제한될 수 있습니다.')) {
+    if (
+      confirm(
+        '이번 주를 마감하시겠습니까? 마감 후에는 출석 수정이 제한될 수 있습니다.'
+      )
+    ) {
       finalizeWeek();
     }
   });
 
   // 멤버별 요약
   loadMemberSummary();
-  $('#refreshMemberSummaryBtn').addEventListener('click', loadMemberSummary);
+  $('#refreshMemberSummaryBtn').addEventListener(
+    'click',
+    loadMemberSummary
+  );
   $('#unpaidOnlyChk').addEventListener('change', loadMemberSummary);
 
   // 모달 초기화
-  payModal = new bootstrap.Modal(document.getElementById('payModal'));
-  paymentLogModal = new bootstrap.Modal(document.getElementById('paymentLogModal'));
+  payModal = new bootstrap.Modal(
+    document.getElementById('payModal')
+  );
+  paymentLogModal = new bootstrap.Modal(
+    document.getElementById('paymentLogModal')
+  );
 
   // 행 버튼들: 납부 / 내역
-  document.body.addEventListener('click', (e) => {
+  document.body.addEventListener('click', e => {
     const payBtn = e.target.closest('.pay-btn');
     if (payBtn) {
-      openPayModal(payBtn.dataset.member, payBtn.dataset.weeks || '');
+      openPayModal(
+        payBtn.dataset.member,
+        payBtn.dataset.weeks || ''
+      );
       return;
     }
     const logBtn = e.target.closest('.log-btn');
